@@ -8,7 +8,8 @@ fastmart_cache_tables(
   ensembl_version = 109,
   overwrite = FALSE,
   GRCh = c("38", "37"),
-  cache_dir = fastmart_default_cache()
+  cache_dir = fastmart_default_cache(),
+  tables_to_create = c("HGNC -> ENSEMBL GENE", "ENSEMBL GENE <-> BIOTYPE")
 )
 }
 \arguments{
