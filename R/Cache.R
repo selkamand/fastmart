@@ -203,10 +203,10 @@ fastmart_convert_hgnc_to_ensembl <- function(hgnc_symbols, chrom, start, end, GR
       if(nrow(df_possible) == 0) return(NA_character_)
 
       closest_index <- most_similar_index(
-        df_input_uniq[["start"]][i],
-        df_input_uniq[["end"]][i],
-        df_possible[["start_position"]][i],
-        df_possible[["start_position"]][i]
+        start1 = df_input_uniq[["start"]][i],
+        end1 = df_input_uniq[["end"]][i],
+        start2 = df_possible[["start_position"]],
+        end2 = df_possible[["end_position"]]
         )
 
       df_possible[["ensembl_gene_id_version"]][closest_index]
