@@ -38,8 +38,7 @@ get_sqlite_path <- function(cache_dir, GRCh){
 #' fastmart_cache_tables()
 #' }
 fastmart_cache_tables <- function(ensembl_version = 109, overwrite = FALSE, GRCh = c("38", "37"),
-                                  cache_dir = fastmart_default_cache(),
-                                  tables_to_create = c('HGNC -> ENSEMBL GENE', 'ENSEMBL GENE <-> BIOTYPE')
+                                  cache_dir = fastmart_default_cache()
                                   ){
   # cli::cli_h2("Setup")
   GRCh <- rlang::arg_match(GRCh)
@@ -50,7 +49,7 @@ fastmart_cache_tables <- function(ensembl_version = 109, overwrite = FALSE, GRCh
 
   if(overwrite == FALSE & file.exists(path_fastmart_db)) cli::cli_abort("Found existing fastmart database at {.path {path_fastmart_db}}. \fTo overwrite existing database, supply {.arg overwrite = TRUE}")
 
-
+  cli::cli_h1("Setup")
   # Fetch biomart (slow step)
   ensembl <- biomaRt::useEnsembl(biomart = 'genes',
                                  dataset = 'hsapiens_gene_ensembl',
@@ -59,63 +58,65 @@ fastmart_cache_tables <- function(ensembl_version = 109, overwrite = FALSE, GRCh
                                  )
 
   conn <- RSQLite::dbConnect(RSQLite::SQLite(), path_fastmart_db)
+  cli::cli_progress_done()
 
   # Convert HGNC -> ENSEMPL gene ID -------------------------------------------------------------------------
-  if('HGNC -> ENSEMBL GENE' %in% tables_to_create){
-    cli::cli_progress_step("[HGNC -> ENSEMBL GENE] [RETRIEVING] retrieving map from ENSEMBL gene mart")
-    df_gene_id_map <- biomaRt::getBM(
-      attributes=c("ensembl_gene_id", "ensembl_gene_id_version", "hgnc_symbol", "gene_biotype", "chromosome_name", "start_position", "end_position"),
-      filters = c("with_hgnc"),
-      values = list(
-        with_hgnc=TRUE
-      ),
-      mart = ensembl
+  cli::cli_h1("HGNC -> ENSEMBL GENE")
+  # Table name hgnc_to_ensembl
+  cli::cli_progress_step("[HGNC -> ENSEMBL GENE] [RETRIEVING] retrieving map from ENSEMBL gene mart")
+  df_gene_id_map <- biomaRt::getBM(
+    attributes=c("ensembl_gene_id", "ensembl_gene_id_version", "hgnc_symbol", "gene_biotype", "chromosome_name", "start_position", "end_position"),
+    filters = c("with_hgnc"),
+    values = list(
+      with_hgnc=TRUE
+    ),
+    mart = ensembl
+  )
+
+  df_gene_id_map[["hgnc_unique_id"]] <- paste(df_gene_id_map[["hgnc_symbol"]], df_gene_id_map[["chromosome_name"]], df_gene_id_map[["start_position"]],df_gene_id_map[["end_position"]])
+
+  assertions::assert(
+    !anyDuplicated(df_gene_id_map[["hgnc_unique_id"]]),
+    msg = "ENSEMBL query returned ambiguous mappings between ENSEMBL gene IDs and hgnc_symbol,start_position,end_position"
     )
 
-    df_gene_id_map[["hgnc_unique_id"]] <- paste(df_gene_id_map[["hgnc_symbol"]], df_gene_id_map[["chromosome_name"]], df_gene_id_map[["start_position"]],df_gene_id_map[["end_position"]])
+  cli::cli_progress_step("[HGNC -> ENSEMBL GENE] [CACHING] saving result to {.strong hgnc_to_ensembl} table in the fastmart database ({.path {path_fastmart_db}})")
+  RSQLite::dbWriteTable(conn, "hgnc_to_ensembl", df_gene_id_map, overwrite = TRUE)
 
-    assertions::assert(
-      !anyDuplicated(df_gene_id_map[["hgnc_unique_id"]]),
-      msg = "ENSEMBL query returned ambiguous mappings between ENSEMBL gene IDs and hgnc_symbol,start_position,end_position"
-      )
+  cli::cli_progress_step("[HGNC -> ENSEMBL GENE] [INDEXING] indexing on symbol.chrom.start.end & ensembl_gene_id")
+  RSQLite::dbExecute(conn, "CREATE INDEX hgnc_unique_id ON hgnc_to_ensembl(hgnc_unique_id)")
+  RSQLite::dbExecute(conn, "CREATE INDEX hgnc_symbol_chr_start_end ON hgnc_to_ensembl(hgnc_symbol, chromosome_name, start_position, end_position)")
+  RSQLite::dbExecute(conn, "CREATE INDEX ensembl_id ON hgnc_to_ensembl(ensembl_gene_id)", overwrite = TRUE)
+  cli::cli_progress_done()
+  cli::cli_alert_success("Successfully created HGNC -> Ensemble ID map at {.path {path_fastmart_db}}")
+  cli::cli_alert_info("To actually convert your gene symbols, run {.code fastmart_hgnc_to_ensembl()}")
 
-    cli::cli_progress_step("[HGNC -> ENSEMBL GENE] [CACHING] saving result to {.strong hgnc_to_ensembl} table in the fastmart database ({.path {path_fastmart_db}})")
-    RSQLite::dbWriteTable(conn, "hgnc_to_ensembl", df_gene_id_map, overwrite = TRUE)
 
-    cli::cli_progress_step("[HGNC -> ENSEMBL GENE] [INDEXING] indexing on symbol.chrom.start.end & ensembl_gene_id")
-    RSQLite::dbExecute(conn, "CREATE INDEX hgnc_unique_id ON hgnc_to_ensembl(hgnc_unique_id)")
-    RSQLite::dbExecute(conn, "CREATE INDEX hgnc_symbol_chr_start_end ON hgnc_to_ensembl(hgnc_symbol, chromosome_name, start_position, end_position)")
-    RSQLite::dbExecute(conn, "CREATE INDEX ensembl_id ON hgnc_to_ensembl(ensembl_gene_id)", overwrite = TRUE)
-    cli::cli_progress_done()
-    cli::cli_alert_success("Successfully created HGNC -> Ensemble ID map at {.path {path_fastmart_db}}")
-    cli::cli_alert_info("To actually convert your gene symbols, run {.code fastmart_hgnc_to_ensembl()}")
-  }
 
   # Annotate Gene Biotype gene ID -------------------------------------------------------------------------
-  if('ENSEMBL GENE <-> BIOTYPE' %in% tables_to_create){
-    # table_name: ensembl_to_biotype
-    cli::cli_progress_step("[ENSEMBL GENE <-> BIOTYPE] [RETRIEVING]")
+  cli::cli_h1("ENSEMBL GENE <-> BIOTYPE")
+  # table_name: ensembl_to_biotype
+  cli::cli_progress_step("[ENSEMBL GENE <-> BIOTYPE] [RETRIEVING]")
 
-    df_gene_biotype <- biomaRt::getBM(
-      attributes=c(
-        "ensembl_gene_id",
-        "gene_biotype"
-      ),
-      mart = ensembl
-    )
+  df_gene_biotype <- biomaRt::getBM(
+    attributes=c(
+      "ensembl_gene_id",
+      "gene_biotype"
+    ),
+    mart = ensembl
+  )
 
-    assertions::assert_no_duplicates(df_gene_biotype[["ensembl_gene_id"]])
-    cli::cli_progress_step("[ENSEMBL GENE <-> BIOTYPE] [CACHING] result to {.strong hgnc_to_ensembl} table in the fastmart database ({.path {path_fastmart_db}})")
-    RSQLite::dbWriteTable(conn, "ensembl_to_biotype", df_gene_biotype, overwrite = TRUE)
+  assertions::assert_no_duplicates(df_gene_biotype[["ensembl_gene_id"]])
+  cli::cli_progress_step("[ENSEMBL GENE <-> BIOTYPE] [CACHING] result to {.strong hgnc_to_ensembl} table in the fastmart database ({.path {path_fastmart_db}})")
+  RSQLite::dbWriteTable(conn, "ensembl_to_biotype", df_gene_biotype, overwrite = TRUE)
 
-    cli::cli_progress_step("[ENSEMBL GENE <-> BIOTYPE] [INDEXING]")
-    RSQLite::dbExecute(conn, "CREATE INDEX ensembl_gene_id ON ensembl_to_biotype(ensembl_gene_id)")
-    RSQLite::dbExecute(conn, "CREATE INDEX gene_biotype ON ensembl_to_biotype(gene_biotype)")
+  cli::cli_progress_step("[ENSEMBL GENE <-> BIOTYPE] [INDEXING]")
+  RSQLite::dbExecute(conn, "CREATE INDEX ensembl_gene_id ON ensembl_to_biotype(ensembl_gene_id)")
+  RSQLite::dbExecute(conn, "CREATE INDEX gene_biotype ON ensembl_to_biotype(gene_biotype)")
 
-    cli::cli_progress_done()
-    cli::cli_alert_success("Successfully created ENSEMBL GENE ID <-> BIOTYPE map at {.path {path_fastmart_db}}")
-    cli::cli_alert_info("To annotate ENSEMBL genes with biotype, run {.code fastmart_convert_hgnc_to_ensembl()}")
-  }
+  cli::cli_progress_done()
+  cli::cli_alert_success("Successfully created ENSEMBL GENE ID <-> BIOTYPE map at {.path {path_fastmart_db}}")
+  cli::cli_alert_info("To annotate ENSEMBL genes with biotype, run {.code fastmart_convert_hgnc_to_ensembl()}")
 
   # Disconnect from database
   RSQLite::dbDisconnect(conn)
@@ -134,6 +135,7 @@ fastmart_cache_tables <- function(ensembl_version = 109, overwrite = FALSE, GRCh
 #' @param chrom Chromosome of Gene. Required to resolve ambiguous mappings (character)
 #' @param start Start position of Gene. Required to resolve ambiguous mappings  (numeric)
 #' @param end End position of Gene. Required to resolve ambiguous mappings  (numeric)
+#' @param exact_match  Is an exact match between chrom-start-end required (TRUE), or should the omst similar interval be returned (FALSE)  (flag)
 #' @inheritParams fastmart_cache_tables
 #'
 #' @return matched ENSEMBL IDs (character)
@@ -145,7 +147,7 @@ fastmart_cache_tables <- function(ensembl_version = 109, overwrite = FALSE, GRCh
 #' # > ENSG00000116957.8
 #' }
 #'
-fastmart_convert_hgnc_to_ensembl <- function(hgnc_symbols, chrom, start, end, GRCh = c("38", "37"), cache_dir = fastmart_default_cache()){
+fastmart_convert_hgnc_to_ensembl <- function(hgnc_symbols, chrom, start, end, GRCh = c("38", "37"), exact_match = TRUE,cache_dir = fastmart_default_cache()){
 
   # Setup
   GRCh <- rlang::arg_match(GRCh)
@@ -161,26 +163,69 @@ fastmart_convert_hgnc_to_ensembl <- function(hgnc_symbols, chrom, start, end, GR
   unique_hgnc_id_set <- unique(observed_unique_hgnc_ids)
   sql_unique_hgnc_id_set <- format_as_sql(unique_hgnc_id_set)
 
-
   # Query DB
-  df_ids <- RSQLite::dbGetQuery(conn = conn, glue::glue_safe("
-                               SELECT
-                                *
-                               FROM
-                                hgnc_to_ensembl
-                               WHERE
-                               hgnc_unique_id IN {sql_unique_hgnc_id_set}
-                               "))
+
+  if(exact_match){
+    df_ids <- RSQLite::dbGetQuery(conn = conn, glue::glue_safe("
+                                 SELECT
+                                  *
+                                 FROM
+                                  hgnc_to_ensembl
+                                 WHERE
+                                 hgnc_unique_id IN {sql_unique_hgnc_id_set}
+                                 "))
+
+  # Return property of interest
+    ensemble_ids <- df_ids[["ensembl_gene_id_version"]][match(observed_unique_hgnc_ids, df_ids[["hgnc_unique_id"]])]
+  }
+  else{
+    key <- paste(hgnc_symbols, chrom, start, end)
+    is_first_occurance <- !duplicated(key)
+    df_input_uniq <- data.frame(hgnc_symbols=hgnc_symbols, chrom=chrom, start=as.numeric(start), end=as.numeric(end), key = key)[is_first_occurance,]
+
+    hgnc_symbols_uniq <- unique(hgnc_symbols)
+    sql_hgnc_symbols <- format_as_sql(unique(hgnc_symbols))
+
+    df_ids <- RSQLite::dbGetQuery(conn = conn, glue::glue_safe("
+                                 SELECT
+                                  *
+                                 FROM
+                                  hgnc_to_ensembl
+                                 WHERE
+                                 hgnc_symbol IN {sql_hgnc_symbols}
+                                 "))
+
+    df_input_uniq[['ensembl_gene_id_version']] <- vapply(seq_len(nrow(df_input_uniq)), FUN = function(i){
+      symbol = df_input_uniq[["hgnc_symbols"]][i]
+      chr = df_input_uniq[["chrom"]][i]
+
+      df_possible <- df_ids[df_ids[["hgnc_symbol"]] == symbol & df_ids[["chromosome_name"]] == chr, ]
+      if(nrow(df_possible) == 0) return(NA_character_)
+
+      closest_index <- most_similar_index(
+        df_input_uniq[["start"]][i],
+        df_input_uniq[["end"]][i],
+        df_possible[["start_position"]][i],
+        df_possible[["start_position"]][i]
+        )
+
+      df_possible[["ensembl_gene_id_version"]][closest_index]
+      }, FUN.VALUE = character(1))
+
+    ensemble_ids <- df_input_uniq[["ensembl_gene_id_version"]][match(key, df_input_uniq[["key"]])]
+  }
 
 
   # Disconnect
   RSQLite::dbDisconnect(conn)
-
-  # Return property of interest
-  ensemble_ids <- df_ids[["ensembl_gene_id_version"]][match(observed_unique_hgnc_ids, df_ids[["hgnc_unique_id"]])]
   return(ensemble_ids)
 
 }
+
+most_similar_index <- function(start1, end1, start2, end2){
+  which.max(abs(start1-start2) + abs(end1-end2))
+}
+
 
 #' Annotate ENSEMBL GENES with BIOTYPE
 #'

@@ -10,6 +10,7 @@ fastmart_convert_hgnc_to_ensembl(
   start,
   end,
   GRCh = c("38", "37"),
+  exact_match = TRUE,
   cache_dir = fastmart_default_cache()
 )
 }
@@ -23,6 +24,8 @@ fastmart_convert_hgnc_to_ensembl(
 \item{end}{End position of Gene. Required to resolve ambiguous mappings  (numeric)}
 
 \item{GRCh}{assembly to use. Can only be set to}
+
+\item{exact_match}{Is an exact match between chrom-start-end required (TRUE), or should the omst similar interval be returned (FALSE)  (flag)}
 
 \item{cache_dir}{directory to store cache in}
 }
