@@ -22,3 +22,5 @@ Imports:
 Remotes: 
     selkamand/assertions
 biocViews:
+URL: https://github.com/selkamand/fastmart
+BugReports: https://github.com/selkamand/fastmart/issues
