@@ -19,17 +19,26 @@ knitr::opts_chunk$set(
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![CRAN status](https://www.r-pkg.org/badges/version/fastmart)](https://CRAN.R-project.org/package=fastmart)
 [![R-CMD-check](https://github.com/selkamand/fastmart/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/selkamand/fastmart/actions/workflows/R-CMD-check.yaml)
+![r-universe](https://selkamand.r-universe.dev/badges/fastmart)
+
 <!-- badges: end -->
 
-The goal of fastmart is to speed up a subset of biomaRt queries by preparing local, properly indexed sqlite databases.
+The goal of fastmart is to speed up a subset of biomart queries by caching local, properly indexed sqlite databases.
 
 
 ## Installation
 
-You can install the development version of fastmart like so:
+You can install fastmart from R-Universe:
 
 ``` r
-install.packages("fastmart", type = "source", repos = "https://github.com/selkamand/fastmart")
+install.packages("fastmart", repos = "https://ropensci.r-universe.dev")
+```
+
+Or if you want to get the develeopment version:
+
+``` r
+# install.packages('remotes')
+remotes::install_github("selkamand/fastmart")
 ```
 
 ## Quick start
