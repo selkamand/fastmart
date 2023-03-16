@@ -34,7 +34,7 @@ Because ENSEMBL IDs are more granular than HGNC / HUGO symbols we require the st
 }
 \examples{
 \dontrun{
-fastmart_hgnc_to_ensembl('TBCE', chrom='1', start='235530675', end='235612283', GRCh = "37")
+fastmart_convert_hgnc_to_ensembl('TBCE', chrom='1', start='235530675', end='235612283', GRCh = "37")
 # > ENSG00000116957.8
 }
 

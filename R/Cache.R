@@ -141,7 +141,7 @@ fastmart_cache_tables <- function(ensembl_version = 109, overwrite = FALSE, GRCh
 #'
 #' @examples
 #' \dontrun{
-#' fastmart_hgnc_to_ensembl('TBCE', chrom='1', start='235530675', end='235612283', GRCh = "37")
+#' fastmart_convert_hgnc_to_ensembl('TBCE', chrom='1', start='235530675', end='235612283', GRCh = "37")
 #' # > ENSG00000116957.8
 #' }
 #'

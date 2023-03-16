@@ -25,7 +25,7 @@ You can install fastmart from R-Universe:
 install.packages("fastmart", repos = "https://ropensci.r-universe.dev")
 ```
 
-Or if you want to get the develeopment version:
+Or install the develeopment version from github:
 
 ``` r
 # install.packages('remotes')
@@ -57,6 +57,13 @@ Convert HGNC Symbols to ENSEMBL gene IDs
 
 ``` r
 # Convert HGNC to Ensemble IDs
-fastmart_hgnc_to_ensembl('TBCE', chrom='1', start='235530675', end='235612283', GRCh = "37")
+fastmart_convert_hgnc_to_ensembl('TBCE', chrom='1', start='235530675', end='235612283', GRCh = "37")
   # > ENSG00000116957.8
+```
+
+### Annotate Gene with biotype
+
+``` r
+fastmart_annotate_biotype('ENSG00000282455.1')
+#> IG_D_gene
 ```
