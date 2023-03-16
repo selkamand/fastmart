@@ -172,11 +172,12 @@ fastmart_convert_hgnc_to_ensembl <- function(hgnc_symbols, chrom, start, end, GR
                                hgnc_unique_id IN {sql_unique_hgnc_id_set}
                                "))
 
+
   # Disconnect
   RSQLite::dbDisconnect(conn)
 
   # Return property of interest
-  ensemble_ids <- df_ids[["ensembl_gene_id_version"]][match(observed_unique_hgnc_ids, df_ids["hgnc_unique_id"])]
+  ensemble_ids <- df_ids[["ensembl_gene_id_version"]][match(observed_unique_hgnc_ids, df_ids[["hgnc_unique_id"]])]
   return(ensemble_ids)
 
 }
@@ -209,7 +210,6 @@ fastmart_annotate_biotype <- function(ensemble_gene_id, GRCh = c("38", "37"), ca
   ensemble_gene_id <- fastmart_ensembl_drop_version(ensemble_gene_id)
   sql_ensemble_gene_id_set <- format_as_sql(unique(ensemble_gene_id))
 
-
   # Query DB
   df_result <- RSQLite::dbGetQuery(conn = conn, glue::glue_safe("
                                SELECT
@@ -224,8 +224,7 @@ fastmart_annotate_biotype <- function(ensemble_gene_id, GRCh = c("38", "37"), ca
   RSQLite::dbDisconnect(conn)
 
   # Return property of interest
-  df_result[["gene_biotype"]][match(ensemble_gene_id, df_result["ensembl_gene_id"])]
-
+  df_result[["gene_biotype"]][match(ensemble_gene_id, df_result[["ensembl_gene_id"]])]
 }
 
 fastmart_ensembl_drop_version <-  function(ensembl_id_version){
