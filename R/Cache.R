@@ -181,7 +181,13 @@ fastmart_convert_hgnc_to_ensembl <- function(hgnc_symbols, chrom, start, end, GR
   else{
     key <- paste(hgnc_symbols, chrom, start, end)
     is_first_occurance <- !duplicated(key)
-    df_input_uniq <- data.frame(hgnc_symbols=hgnc_symbols, chrom=chrom, start=as.numeric(start), end=as.numeric(end), key = key)[is_first_occurance,]
+    df_input_uniq <- data.frame(
+      hgnc_symbols=hgnc_symbols,
+      chrom=chrom,
+      start=suppressWarnings(as.numeric(start)),
+      end=suppressWarnings(as.numeric(end)),
+      key = key)[is_first_occurance,]
+    df_input_uniq <- na.omit(df_input_uniq)
 
     hgnc_symbols_uniq <- unique(hgnc_symbols)
     sql_hgnc_symbols <- format_as_sql(unique(hgnc_symbols))
