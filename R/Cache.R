@@ -9,6 +9,15 @@ fastmart_default_cache <- function(){
   "~/.fastmart"
 }
 
+#' Initialise fastmart
+#'
+#' Creates a folder (by default at ~/.fastmart) where any database caches will be stored
+#'
+#' @inheritParams fastmart_cache_tables
+#'
+#' @return path to the newly created fastmart cache
+#' @export
+#'
 fastmart_init <- function(cache_dir = fastmart_default_cache()){
   if(file.exists(cache_dir))
     cli::cli_abort("Cache already exists at {.path {cache_dir}}. Doing nothing")
@@ -16,6 +25,8 @@ fastmart_init <- function(cache_dir = fastmart_default_cache()){
     cli::cli_alert("Creating Cache at: {.path {cache_dir}}")
     dir.create(cache_dir)
   }
+
+  return(cache_dir)
 }
 
 
@@ -147,7 +158,7 @@ fastmart_cache_tables <- function(ensembl_version = 109, overwrite = FALSE, GRCh
 #' # > ENSG00000116957.8
 #' }
 #'
-fastmart_convert_hgnc_to_ensembl <- function(hgnc_symbols, chrom, start, end, GRCh = c("38", "37"), exact_match = TRUE,cache_dir = fastmart_default_cache()){
+fastmart_convert_hgnc_to_ensembl <- function(hgnc_symbols, chrom, start, end, GRCh = c("38", "37"), exact_match = TRUE, no_pos_required = FALSE, cache_dir = fastmart_default_cache()){
 
   # Setup
   GRCh <- rlang::arg_match(GRCh)
@@ -186,8 +197,8 @@ fastmart_convert_hgnc_to_ensembl <- function(hgnc_symbols, chrom, start, end, GR
       chrom=chrom,
       start=suppressWarnings(as.numeric(start)),
       end=suppressWarnings(as.numeric(end)),
-      key = key)[is_first_occurance,]
-    df_input_uniq <- na.omit(df_input_uniq)
+      key = key)[is_first_occurance & !is.na(hgnc_symbols),]
+    #df_input_uniq <- na.omit(df_input_uniq)
 
     hgnc_symbols_uniq <- unique(hgnc_symbols)
     sql_hgnc_symbols <- format_as_sql(unique(hgnc_symbols))
@@ -204,13 +215,30 @@ fastmart_convert_hgnc_to_ensembl <- function(hgnc_symbols, chrom, start, end, GR
     df_input_uniq[['ensembl_gene_id_version']] <- vapply(seq_len(nrow(df_input_uniq)), FUN = function(i){
       symbol = df_input_uniq[["hgnc_symbols"]][i]
       chr = df_input_uniq[["chrom"]][i]
+      cur_start = df_input_uniq[["start"]][i]
+      cur_end = df_input_uniq[["end"]][i]
+
+        if (is.na(chr) | is.na(cur_start) | is.na(cur_end)) {
+          if(!no_pos_required)
+            return(NA)
+          else {
+            res = df_ids[df_ids[["hgnc_symbol"]] == symbol,][["hgnc_symbol"]][1]
+            if(length(res) == 0 ) return(NA)
+            else return(res)
+          }
+        }
 
       df_possible <- df_ids[df_ids[["hgnc_symbol"]] == symbol & df_ids[["chromosome_name"]] == chr, ]
-      if(nrow(df_possible) == 0) return(NA_character_)
+      if(nrow(df_possible) == 0) {
+        if(no_pos_required){
+
+        }
+        return(NA_character_)
+      }
 
       closest_index <- most_similar_index(
-        start1 = df_input_uniq[["start"]][i],
-        end1 = df_input_uniq[["end"]][i],
+        start1 = cur_start,
+        end1 = cur_end,
         start2 = df_possible[["start_position"]],
         end2 = df_possible[["end_position"]]
         )

@@ -11,6 +11,7 @@ fastmart_convert_hgnc_to_ensembl(
   end,
   GRCh = c("38", "37"),
   exact_match = TRUE,
+  no_pos_required = FALSE,
   cache_dir = fastmart_default_cache()
 )
 }
